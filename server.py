@@ -5,6 +5,7 @@ import collections
 import json
 import os
 import sqlite3
+import subprocess
 import threading
 import time
 import urllib.parse
@@ -189,6 +190,78 @@ def get_history():
     }
 
 
+_PRIORITY_SERVICES = {"openclaw", "engram", "ssh"}
+
+
+def get_services():
+    """Return list of systemd services with name, load, active, sub, description."""
+    try:
+        result = subprocess.run(
+            [
+                "systemctl", "list-units",
+                "--type=service",
+                "--state=running,failed,inactive",
+                "--no-pager",
+                "--plain",
+                "--no-legend",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        services = {}
+        for line in result.stdout.splitlines():
+            parts = line.split(None, 4)
+            if len(parts) < 4:
+                continue
+            unit = parts[0]
+            if not unit.endswith(".service"):
+                continue
+            name = unit[:-len(".service")]
+            svc = {
+                "name": name,
+                "load": parts[1],
+                "active": parts[2],
+                "sub": parts[3],
+                "description": parts[4].strip() if len(parts) > 4 else "",
+            }
+            services[name] = svc
+
+        # Ensure priority services are included even if not matched by state filter
+        for svc_name in _PRIORITY_SERVICES:
+            if svc_name in services:
+                continue
+            r2 = subprocess.run(
+                ["systemctl", "show", f"{svc_name}.service",
+                 "--property=LoadState,ActiveState,SubState,Description"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if r2.returncode != 0:
+                continue
+            props = {}
+            for ln in r2.stdout.splitlines():
+                if "=" in ln:
+                    k, v = ln.split("=", 1)
+                    props[k] = v
+            if not props.get("LoadState"):
+                continue
+            services[svc_name] = {
+                "name": svc_name,
+                "load": props.get("LoadState", ""),
+                "active": props.get("ActiveState", ""),
+                "sub": props.get("SubState", ""),
+                "description": props.get("Description", ""),
+            }
+
+        # Sort: priority services first, then alphabetical
+        def sort_key(s):
+            return (0 if s["name"] in _PRIORITY_SERVICES else 1, s["name"])
+
+        return sorted(services.values(), key=sort_key)
+    except Exception as e:
+        return {"error": str(e), "services": []}
+
+
 def get_memory(query=None):
     """Return observations from engram.db, optionally filtered by query string."""
     if not os.path.exists(ENGRAM_DB):
@@ -228,6 +301,21 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/api/services":
+            try:
+                data = get_services()
+                body = json.dumps(data).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(str(e).encode())
+            return
         if parsed.path == "/api/memory":
             qs = urllib.parse.parse_qs(parsed.query)
             query = qs.get("q", [None])[0]

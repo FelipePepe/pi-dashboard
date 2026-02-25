@@ -312,6 +312,60 @@
     text-align: center;
   }
 
+  /* Servicios tab */
+  .svc-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .svc-row {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .svc-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .svc-dot.running  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .svc-dot.failed   { background: var(--red);   box-shadow: 0 0 6px var(--red);   }
+  .svc-dot.inactive { background: var(--muted); }
+
+  .svc-name {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text);
+    min-width: 140px;
+  }
+
+  .svc-desc {
+    font-size: 12px;
+    color: var(--muted);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .svc-badge {
+    flex-shrink: 0;
+  }
+
+  #svc-updated {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
   /* Graficas tab */
   .chart-card {
     background: var(--surface);
@@ -340,6 +394,7 @@
 <nav class="tabs">
   <button class="tab-btn active" data-tab="stats">&#128187; Sistema</button>
   <button class="tab-btn" data-tab="charts">&#128200; Gr&#225;ficas</button>
+  <button class="tab-btn" data-tab="services">&#9881;&#65039; Servicios</button>
   <button class="tab-btn" data-tab="memory">&#129504; Memoria</button>
 </nav>
 
@@ -422,6 +477,12 @@
     <div class="card-label">RAM % &mdash; last 5 min</div>
     <div class="chart-wrap"><canvas id="chart-ram"></canvas></div>
   </div>
+</div>
+
+<!-- Servicios tab -->
+<div class="tab-panel" id="tab-services">
+  <div id="svc-updated">Cargando…</div>
+  <div class="svc-list" id="svc-list"></div>
 </div>
 
 <!-- Memoria tab -->
@@ -734,6 +795,75 @@
 
   // Auto-refresh charts every 5s regardless of active tab
   setInterval(fetchHistory, INTERVAL);
+
+  // ── Servicios tab ───────────────────────────────────────────────
+  const API_SERVICES = '/api/services';
+  const SVC_INTERVAL = 10000;
+
+  function svcDotClass(active, sub) {
+    if (active === 'active' && sub === 'running') return 'running';
+    if (active === 'failed') return 'failed';
+    return 'inactive';
+  }
+
+  function svcBadge(active, sub) {
+    const state = sub || active;
+    if (active === 'active' && sub === 'running')
+      return `<span class="badge badge-green">${escHtml(state)}</span>`;
+    if (active === 'failed')
+      return `<span class="badge badge-red">${escHtml(state)}</span>`;
+    return `<span class="badge badge-gray">${escHtml(state)}</span>`;
+  }
+
+  function renderServices(data) {
+    const list = document.getElementById('svc-list');
+    const updEl = document.getElementById('svc-updated');
+
+    const services = Array.isArray(data) ? data : (data.services || []);
+    if (data.error) {
+      list.innerHTML = `<div style="color:var(--red);padding:12px 0">${escHtml(data.error)}</div>`;
+      return;
+    }
+    if (!services.length) {
+      list.innerHTML = '<div style="color:var(--muted);padding:12px 0">No se encontraron servicios.</div>';
+      return;
+    }
+
+    list.innerHTML = '';
+    services.forEach(svc => {
+      const dotCls = svcDotClass(svc.active, svc.sub);
+      const row = document.createElement('div');
+      row.className = 'svc-row';
+      row.innerHTML =
+        `<span class="svc-dot ${dotCls}"></span>` +
+        `<span class="svc-name">${escHtml(svc.name)}</span>` +
+        `<span class="svc-desc">${escHtml(svc.description)}</span>` +
+        `<span class="svc-badge">${svcBadge(svc.active, svc.sub)}</span>`;
+      list.appendChild(row);
+    });
+
+    updEl.textContent = 'Actualizado: ' + new Date().toLocaleTimeString();
+  }
+
+  function fetchServices() {
+    fetch(API_SERVICES)
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(renderServices)
+      .catch(err => {
+        document.getElementById('svc-list').innerHTML =
+          `<div style="color:var(--red);padding:12px 0">Error: ${escHtml(err.message)}</div>`;
+      });
+  }
+
+  // Load services when switching to that tab
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.tab === 'services') fetchServices();
+    });
+  });
+
+  // Auto-refresh services every 10s
+  setInterval(fetchServices, SVC_INTERVAL);
 </script>
 </body>
 </html>
