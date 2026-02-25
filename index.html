@@ -72,10 +72,15 @@
   /* Tabs */
   .tabs {
     display: flex;
+    flex-wrap: wrap;
     gap: 4px;
     margin-bottom: 20px;
     border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
   }
+  .tabs::-webkit-scrollbar { display: none; }
 
   .tab-btn {
     background: none;
@@ -85,9 +90,18 @@
     cursor: pointer;
     font-family: inherit;
     font-size: 13px;
-    padding: 8px 14px;
+    padding: 8px 12px;
     margin-bottom: -1px;
     transition: color 0.2s, border-color 0.2s;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 600px) {
+    .tab-btn {
+      font-size: 11px;
+      padding: 7px 8px;
+    }
   }
 
   .tab-btn:hover { color: var(--text); }
