@@ -1,12 +1,36 @@
 #!/usr/bin/env python3
-"""Pi Dashboard server - exposes /api/stats, /api/memory and serves index.html on port 8080."""
+"""Pi Dashboard server - exposes /api/stats, /api/memory, /api/history and serves index.html on port 8080."""
 
+import collections
 import json
 import os
 import sqlite3
+import threading
 import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
+
+HISTORY_MAXLEN = 60  # 60 samples × 5s = 5 minutes
+_history_lock = threading.Lock()
+_history: collections.deque = collections.deque(maxlen=HISTORY_MAXLEN)
+
+
+def _collect_history():
+    """Background thread: record cpu_percent and ram percent every 5 seconds."""
+    while True:
+        try:
+            cpu = read_cpu_usage()
+            ram = read_ram_usage()
+            entry = {
+                "ts": time.strftime("%H:%M:%S"),
+                "cpu": cpu,
+                "ram": ram["percent"],
+            }
+            with _history_lock:
+                _history.append(entry)
+        except Exception:
+            pass
+        time.sleep(5)
 
 ENGRAM_DB = os.path.expanduser("~/.engram/engram.db")
 
@@ -155,6 +179,16 @@ def get_stats():
     }
 
 
+def get_history():
+    with _history_lock:
+        items = list(_history)
+    return {
+        "timestamps": [e["ts"] for e in items],
+        "cpu": [e["cpu"] for e in items],
+        "ram": [e["ram"] for e in items],
+    }
+
+
 def get_memory(query=None):
     """Return observations from engram.db, optionally filtered by query string."""
     if not os.path.exists(ENGRAM_DB):
@@ -211,6 +245,21 @@ class Handler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(str(e).encode())
             return
+        if parsed.path == "/api/history":
+            try:
+                data = get_history()
+                body = json.dumps(data).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(str(e).encode())
+            return
         if self.path == "/api/stats":
             try:
                 data = get_stats()
@@ -247,6 +296,8 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = 8080
+    t = threading.Thread(target=_collect_history, daemon=True)
+    t.start()
     server = HTTPServer(("0.0.0.0", port), Handler)
     print(f"Pi Dashboard running at http://0.0.0.0:{port}")
     try:
