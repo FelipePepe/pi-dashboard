@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pi Dashboard</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0d1117;
+    --surface:  #161b22;
+    --border:   #30363d;
+    --text:     #e6edf3;
+    --muted:    #8b949e;
+    --accent:   #58a6ff;
+    --green:    #3fb950;
+    --yellow:   #d29922;
+    --red:      #f85149;
+    --radius:   8px;
+    --gap:      16px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 14px;
+    min-height: 100vh;
+    padding: 24px var(--gap);
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--text);
+  }
+
+  header h1 span { color: var(--accent); }
+
+  #status {
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  #status::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+  }
+
+  #status.error::before { background: var(--red); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: var(--gap);
+    margin-bottom: var(--gap);
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+
+  .card-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  .card-value {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 10px;
+    color: var(--text);
+  }
+
+  .card-sub {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* Progress bar */
+  .bar-track {
+    width: 100%;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-top: 10px;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.4s ease;
+    background: var(--green);
+  }
+
+  .bar-fill.warn  { background: var(--yellow); }
+  .bar-fill.crit  { background: var(--red); }
+
+  /* Uptime / load card spans full width on small screens */
+  .card-wide {
+    grid-column: span 2;
+  }
+
+  @media (max-width: 520px) {
+    .card-wide { grid-column: span 1; }
+  }
+
+  /* Process table */
+  .proc-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: var(--gap);
+  }
+
+  .proc-card .card-label { margin-bottom: 14px; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  th, td {
+    text-align: left;
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+
+  th {
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+  }
+
+  tr + tr td { border-top: 1px solid var(--border); }
+
+  td.pid   { color: var(--muted); width: 60px; }
+  td.name  { font-weight: 600; }
+  td.cpu   { text-align: right; width: 90px; }
+  td.mem   { text-align: right; width: 80px; color: var(--muted); }
+
+  .badge {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .badge-green  { background: rgba(63,185,80,.15);  color: var(--green);  }
+  .badge-yellow { background: rgba(210,153,34,.15); color: var(--yellow); }
+  .badge-red    { background: rgba(248,81,73,.15);  color: var(--red);    }
+
+  footer {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span>&#9632;</span> Pi Dashboard</h1>
+  <div id="status">Connecting…</div>
+</header>
+
+<div class="grid" id="stat-grid">
+  <!-- CPU -->
+  <div class="card" id="card-cpu">
+    <div class="card-label">CPU Usage</div>
+    <div class="card-value" id="cpu-val">—</div>
+    <div class="card-sub" id="cpu-sub"></div>
+    <div class="bar-track"><div class="bar-fill" id="cpu-bar" style="width:0%"></div></div>
+  </div>
+
+  <!-- RAM -->
+  <div class="card" id="card-ram">
+    <div class="card-label">RAM Usage</div>
+    <div class="card-value" id="ram-val">—</div>
+    <div class="card-sub" id="ram-sub"></div>
+    <div class="bar-track"><div class="bar-fill" id="ram-bar" style="width:0%"></div></div>
+  </div>
+
+  <!-- Disk -->
+  <div class="card" id="card-disk">
+    <div class="card-label">Disk Usage</div>
+    <div class="card-value" id="disk-val">—</div>
+    <div class="card-sub" id="disk-sub"></div>
+    <div class="bar-track"><div class="bar-fill" id="disk-bar" style="width:0%"></div></div>
+  </div>
+
+  <!-- CPU Temp -->
+  <div class="card" id="card-temp">
+    <div class="card-label">CPU Temp</div>
+    <div class="card-value" id="temp-val">—</div>
+    <div class="card-sub" id="temp-sub"></div>
+    <div class="bar-track"><div class="bar-fill" id="temp-bar" style="width:0%"></div></div>
+  </div>
+
+  <!-- Load -->
+  <div class="card">
+    <div class="card-label">Load Average</div>
+    <div class="card-value" id="load-val">—</div>
+    <div class="card-sub" id="load-sub">1 min / 5 min / 15 min</div>
+  </div>
+
+  <!-- Uptime -->
+  <div class="card">
+    <div class="card-label">Uptime</div>
+    <div class="card-value" style="font-size:20px;" id="uptime-val">—</div>
+    <div class="card-sub" id="uptime-sub"></div>
+  </div>
+</div>
+
+<!-- Top Processes -->
+<div class="proc-card">
+  <div class="card-label">Top 5 Processes by CPU Time</div>
+  <table>
+    <thead>
+      <tr>
+        <th>PID</th>
+        <th>Name</th>
+        <th style="text-align:right">CPU Time</th>
+        <th style="text-align:right">Mem</th>
+      </tr>
+    </thead>
+    <tbody id="proc-body">
+      <tr><td colspan="4" style="color:var(--muted);padding:12px 8px">Loading…</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<footer id="footer">Last updated: —</footer>
+
+<script>
+  const API = '/api/stats';
+  const INTERVAL = 5000;
+
+  function colorClass(pct, warn=60, crit=85) {
+    if (pct >= crit) return 'crit';
+    if (pct >= warn) return 'warn';
+    return '';
+  }
+
+  function tempColor(t) {
+    if (t === null) return '';
+    if (t >= 80) return 'crit';
+    if (t >= 65) return 'warn';
+    return '';
+  }
+
+  function setBar(id, pct, cls) {
+    const el = document.getElementById(id);
+    el.style.width = Math.min(pct, 100) + '%';
+    el.className = 'bar-fill' + (cls ? ' ' + cls : '');
+  }
+
+  function setValue(id, text) {
+    document.getElementById(id).textContent = text;
+  }
+
+  function fmtCpuTime(ticks) {
+    // ticks are jiffies (typically 1/100 s each)
+    const secs = ticks / 100;
+    if (secs < 60) return secs.toFixed(1) + 's';
+    if (secs < 3600) return (secs / 60).toFixed(1) + 'm';
+    return (secs / 3600).toFixed(1) + 'h';
+  }
+
+  function update(data) {
+    // CPU
+    const cpuPct = data.cpu_percent;
+    setValue('cpu-val', cpuPct + '%');
+    setValue('cpu-sub', '');
+    setBar('cpu-bar', cpuPct, colorClass(cpuPct));
+
+    // RAM
+    const ram = data.ram;
+    setValue('ram-val', ram.percent + '%');
+    setValue('ram-sub', ram.used_mb + ' MB / ' + ram.total_mb + ' MB');
+    setBar('ram-bar', ram.percent, colorClass(ram.percent));
+
+    // Disk
+    const disk = data.disk;
+    setValue('disk-val', disk.percent + '%');
+    setValue('disk-sub', disk.used_gb + ' GB / ' + disk.total_gb + ' GB');
+    setBar('disk-bar', disk.percent, colorClass(disk.percent, 70, 90));
+
+    // Temp
+    const temp = data.cpu_temp_c;
+    if (temp !== null) {
+      setValue('temp-val', temp + ' °C');
+      setValue('temp-sub', temp >= 80 ? 'HOT' : temp >= 65 ? 'Warm' : 'Normal');
+      // Map 0–100 °C to 0–100%
+      setBar('temp-bar', temp, tempColor(temp));
+    } else {
+      setValue('temp-val', 'N/A');
+      setValue('temp-sub', 'sensor unavailable');
+    }
+
+    // Load
+    const load = data.load;
+    setValue('load-val', load['1min'].toFixed(2));
+    setValue('load-sub', load['1min'].toFixed(2) + ' / ' + load['5min'].toFixed(2) + ' / ' + load['15min'].toFixed(2));
+
+    // Uptime
+    setValue('uptime-val', data.uptime);
+
+    // Processes
+    const tbody = document.getElementById('proc-body');
+    tbody.innerHTML = '';
+    (data.top_processes || []).forEach(p => {
+      const tr = document.createElement('tr');
+      const cpuStr = fmtCpuTime(p.cpu_time);
+      tr.innerHTML =
+        `<td class="pid">${p.pid}</td>` +
+        `<td class="name">${escHtml(p.name)}</td>` +
+        `<td class="cpu"><span class="badge badge-green">${cpuStr}</span></td>` +
+        `<td class="mem">${p.mem_mb} MB</td>`;
+      tbody.appendChild(tr);
+    });
+
+    // Status
+    const statusEl = document.getElementById('status');
+    statusEl.textContent = 'Live';
+    statusEl.className = '';
+
+    // Footer
+    document.getElementById('footer').textContent =
+      'Last updated: ' + new Date().toLocaleTimeString();
+  }
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function fetchStats() {
+    fetch(API)
+      .then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(update)
+      .catch(err => {
+        const statusEl = document.getElementById('status');
+        statusEl.textContent = 'Error: ' + err.message;
+        statusEl.className = 'error';
+      });
+  }
+
+  fetchStats();
+  setInterval(fetchStats, INTERVAL);
+</script>
+</body>
+</html>
