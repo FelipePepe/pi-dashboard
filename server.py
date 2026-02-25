@@ -262,6 +262,70 @@ def get_services():
         return {"error": str(e), "services": []}
 
 
+ALERT_THRESHOLDS = {
+    "cpu":  {"warning": 75, "critical": 85},
+    "ram":  {"warning": 70, "critical": 80},
+    "temp": {"warning": 65, "critical": 70},
+    "disk": {"warning": 80, "critical": 90},
+}
+
+
+def get_alerts():
+    alerts = []
+    try:
+        cpu = read_cpu_usage()
+        th = ALERT_THRESHOLDS["cpu"]
+        if cpu >= th["critical"]:
+            alerts.append({"level": "critical", "metric": "cpu", "value": cpu,
+                           "threshold": th["critical"], "message": f"CPU at {cpu}% (threshold {th['critical']}%)"})
+        elif cpu >= th["warning"]:
+            alerts.append({"level": "warning", "metric": "cpu", "value": cpu,
+                           "threshold": th["warning"], "message": f"CPU at {cpu}% (threshold {th['warning']}%)"})
+    except Exception:
+        pass
+
+    try:
+        ram = read_ram_usage()
+        th = ALERT_THRESHOLDS["ram"]
+        pct = ram["percent"]
+        if pct >= th["critical"]:
+            alerts.append({"level": "critical", "metric": "ram", "value": pct,
+                           "threshold": th["critical"], "message": f"RAM at {pct}% (threshold {th['critical']}%)"})
+        elif pct >= th["warning"]:
+            alerts.append({"level": "warning", "metric": "ram", "value": pct,
+                           "threshold": th["warning"], "message": f"RAM at {pct}% (threshold {th['warning']}%)"})
+    except Exception:
+        pass
+
+    try:
+        temp = read_cpu_temp()
+        if temp is not None:
+            th = ALERT_THRESHOLDS["temp"]
+            if temp >= th["critical"]:
+                alerts.append({"level": "critical", "metric": "temp", "value": temp,
+                               "threshold": th["critical"], "message": f"CPU temp at {temp}°C (threshold {th['critical']}°C)"})
+            elif temp >= th["warning"]:
+                alerts.append({"level": "warning", "metric": "temp", "value": temp,
+                               "threshold": th["warning"], "message": f"CPU temp at {temp}°C (threshold {th['warning']}°C)"})
+    except Exception:
+        pass
+
+    try:
+        disk = read_disk_usage()
+        th = ALERT_THRESHOLDS["disk"]
+        pct = disk["percent"]
+        if pct >= th["critical"]:
+            alerts.append({"level": "critical", "metric": "disk", "value": pct,
+                           "threshold": th["critical"], "message": f"Disk at {pct}% (threshold {th['critical']}%)"})
+        elif pct >= th["warning"]:
+            alerts.append({"level": "warning", "metric": "disk", "value": pct,
+                           "threshold": th["warning"], "message": f"Disk at {pct}% (threshold {th['warning']}%)"})
+    except Exception:
+        pass
+
+    return alerts
+
+
 def get_memory(query=None):
     """Return observations from engram.db, optionally filtered by query string."""
     if not os.path.exists(ENGRAM_DB):
@@ -301,6 +365,21 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/api/alerts":
+            try:
+                data = get_alerts()
+                body = json.dumps(data).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(str(e).encode())
+            return
         if parsed.path == "/api/services":
             try:
                 data = get_services()

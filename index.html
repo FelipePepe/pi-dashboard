@@ -366,6 +366,41 @@
     margin-bottom: 12px;
   }
 
+  /* Alerts banner */
+  #alert-banner {
+    display: none;
+    margin-bottom: 16px;
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  #alert-banner.visible { display: block; }
+
+  .alert-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(0,0,0,0.2);
+  }
+
+  .alert-item:last-child { border-bottom: none; }
+
+  .alert-item.critical {
+    background: rgba(248,81,73,0.15);
+    border-left: 3px solid var(--red);
+    color: var(--red);
+  }
+
+  .alert-item.warning {
+    background: rgba(210,153,34,0.15);
+    border-left: 3px solid var(--yellow);
+    color: var(--yellow);
+  }
+
+  .alert-icon { font-size: 14px; flex-shrink: 0; }
+
   /* Graficas tab */
   .chart-card {
     background: var(--surface);
@@ -389,6 +424,9 @@
   <h1><span>&#9632;</span> Pi Dashboard</h1>
   <div id="status">Connecting…</div>
 </header>
+
+<!-- Alert banner (shown when there are active alerts) -->
+<div id="alert-banner"></div>
 
 <!-- Tab navigation -->
 <nav class="tabs">
@@ -504,9 +542,45 @@
 <footer id="footer">Last updated: —</footer>
 
 <script>
-  const API_STATS  = '/api/stats';
-  const API_MEMORY = '/api/memory';
-  const INTERVAL   = 5000;
+  const API_STATS   = '/api/stats';
+  const API_MEMORY  = '/api/memory';
+  const API_ALERTS  = '/api/alerts';
+  const INTERVAL    = 5000;
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  // ── Alerts banner ──────────────────────────────────────────────
+  function renderAlerts(alerts) {
+    const banner = document.getElementById('alert-banner');
+    if (!alerts || !alerts.length) {
+      banner.className = '';
+      banner.innerHTML = '';
+      return;
+    }
+    banner.className = 'visible';
+    banner.innerHTML = alerts.map(a => {
+      const icon = a.level === 'critical' ? '🔴' : '⚠️';
+      return `<div class="alert-item ${escHtml(a.level)}">` +
+             `<span class="alert-icon">${icon}</span>` +
+             `<span>${escHtml(a.message)}</span>` +
+             `</div>`;
+    }).join('');
+  }
+
+  function fetchAlerts() {
+    fetch(API_ALERTS)
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(renderAlerts)
+      .catch(() => {});
+  }
+
+  fetchAlerts();
+  setInterval(fetchAlerts, 5000);
 
   // ── Tab switching ──────────────────────────────────────────────
   document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -599,13 +673,6 @@
 
     document.getElementById('footer').textContent =
       'Last updated: ' + new Date().toLocaleTimeString();
-  }
-
-  function escHtml(s) {
-    return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
   }
 
   function fetchStats() {
