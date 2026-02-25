@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Pi Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -310,6 +311,22 @@
     color: var(--muted);
     text-align: center;
   }
+
+  /* Graficas tab */
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 20px 16px;
+    margin-bottom: var(--gap);
+  }
+
+  .chart-card .card-label { margin-bottom: 14px; }
+
+  .chart-wrap {
+    position: relative;
+    height: 200px;
+  }
 </style>
 </head>
 <body>
@@ -322,6 +339,7 @@
 <!-- Tab navigation -->
 <nav class="tabs">
   <button class="tab-btn active" data-tab="stats">&#128187; Sistema</button>
+  <button class="tab-btn" data-tab="charts">&#128200; Gr&#225;ficas</button>
   <button class="tab-btn" data-tab="memory">&#129504; Memoria</button>
 </nav>
 
@@ -391,6 +409,18 @@
         <tr><td colspan="4" style="color:var(--muted);padding:12px 8px">Loading…</td></tr>
       </tbody>
     </table>
+  </div>
+</div>
+
+<!-- Graficas tab -->
+<div class="tab-panel" id="tab-charts">
+  <div class="chart-card">
+    <div class="card-label">CPU % &mdash; last 5 min</div>
+    <div class="chart-wrap"><canvas id="chart-cpu"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <div class="card-label">RAM % &mdash; last 5 min</div>
+    <div class="chart-wrap"><canvas id="chart-ram"></canvas></div>
   </div>
 </div>
 
@@ -621,8 +651,89 @@
         const q = document.getElementById('memory-search').value.trim();
         fetchMemory(q);
       }
+      if (btn.dataset.tab === 'charts') {
+        fetchHistory();
+      }
     });
   });
+
+  // ── Graficas tab ────────────────────────────────────────────────
+  const API_HISTORY = '/api/history';
+
+  const CHART_DEFAULTS = {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 300 },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#161b22',
+        borderColor: '#30363d',
+        borderWidth: 1,
+        titleColor: '#8b949e',
+        bodyColor: '#e6edf3',
+      },
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: { color: '#8b949e', font: { size: 10 }, maxTicksLimit: 8 },
+        border: { color: '#30363d' },
+      },
+      y: {
+        min: 0,
+        max: 100,
+        grid: { color: 'rgba(48,54,61,0.5)', drawBorder: false },
+        ticks: { color: '#8b949e', font: { size: 10 }, callback: v => v + '%' },
+        border: { dash: [4, 4], color: 'transparent' },
+      },
+    },
+  };
+
+  function makeDataset(color) {
+    return {
+      data: [],
+      borderColor: color,
+      backgroundColor: color.replace(')', ', 0.12)').replace('rgb', 'rgba'),
+      borderWidth: 2,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      fill: true,
+      tension: 0.3,
+    };
+  }
+
+  const cpuChart = new Chart(document.getElementById('chart-cpu'), {
+    type: 'line',
+    data: { labels: [], datasets: [makeDataset('rgb(88,166,255)')] },
+    options: CHART_DEFAULTS,
+  });
+
+  const ramChart = new Chart(document.getElementById('chart-ram'), {
+    type: 'line',
+    data: { labels: [], datasets: [makeDataset('rgb(63,185,80)')] },
+    options: CHART_DEFAULTS,
+  });
+
+  function updateCharts(data) {
+    cpuChart.data.labels = data.timestamps;
+    cpuChart.data.datasets[0].data = data.cpu;
+    cpuChart.update();
+
+    ramChart.data.labels = data.timestamps;
+    ramChart.data.datasets[0].data = data.ram;
+    ramChart.update();
+  }
+
+  function fetchHistory() {
+    fetch(API_HISTORY)
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(updateCharts)
+      .catch(() => {});
+  }
+
+  // Auto-refresh charts every 5s regardless of active tab
+  setInterval(fetchHistory, INTERVAL);
 </script>
 </body>
 </html>
