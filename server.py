@@ -10,6 +10,10 @@ import threading
 import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+
+MINDMAP_DIR = Path("/home/felipe/sources/pi-dashboard/mindmaps")
+MINDMAP_DIR.mkdir(exist_ok=True)
 
 HISTORY_MAXLEN = 60  # 60 samples × 5s = 5 minutes
 _history_lock = threading.Lock()
@@ -553,6 +557,18 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_response(404)
                 self.end_headers()
                 self.wfile.write(b"index.html not found")
+        elif parsed.path.startswith("/mindmap/"):
+            mindmap_id = parsed.path.split("/mindmap/")[1]
+            mindmap_file = MINDMAP_DIR / f"mindmap-{mindmap_id}.html"
+            if mindmap_file.exists():
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(mindmap_file.read_bytes())
+            else:
+                self.send_response(404)
+                self.end_headers()
+                self.wfile.write(b"Mind map not found")
         else:
             self.send_response(404)
             self.end_headers()
