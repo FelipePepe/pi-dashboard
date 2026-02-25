@@ -6,10 +6,10 @@ Build a local web dashboard for ClockworkPi (Ubuntu ARM64) that shows system sta
 ## Tasks
 
 - [x] Create TODO.md
-- [ ] Write server.py (Flask, /api/stats endpoint, port 8080)
-- [ ] Write index.html (dark theme, inline CSS/JS, auto-refresh every 5s)
-- [ ] Test locally
-- [ ] Final commit
+- [x] Write server.py (stdlib http.server, /api/stats endpoint, port 8080)
+- [x] Write index.html (dark theme, inline CSS/JS, auto-refresh every 5s)
+- [x] Test locally (API returns valid JSON, HTML served correctly)
+- [x] Final commit
 
 ## Stats to Display
 
