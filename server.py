@@ -270,6 +270,59 @@ ALERT_THRESHOLDS = {
 }
 
 
+SESSIONS_JSON = os.path.expanduser("~/.openclaw/agents/main/sessions/sessions.json")
+
+
+def get_subagents():
+    """Read openclaw sessions.json and return recent/active sessions."""
+    if not os.path.exists(SESSIONS_JSON):
+        return {"error": "sessions.json not found", "sessions": []}
+    try:
+        with open(SESSIONS_JSON) as f:
+            data = json.load(f)
+
+        sessions = []
+        for key, val in data.items():
+            if not isinstance(val, dict):
+                continue
+            # Skip individual cron run entries (too many, low signal)
+            if ":run:" in key:
+                continue
+            updated_at = val.get("updatedAt")  # ms epoch
+            label = val.get("label") or key.split(":")[-1]
+            model = val.get("model", "")
+            total_tokens = val.get("totalTokens", 0)
+            session_id = val.get("sessionId", "")
+
+            # Derive a type tag from the key
+            if ":subagent:" in key:
+                kind = "subagent"
+            elif ":cron:" in key:
+                kind = "cron"
+            elif ":telegram:" in key:
+                kind = "telegram"
+            elif key.endswith(":main"):
+                kind = "main"
+            else:
+                kind = "other"
+
+            sessions.append({
+                "key": key,
+                "label": label,
+                "kind": kind,
+                "model": model,
+                "total_tokens": total_tokens,
+                "session_id": session_id,
+                "updated_at_ms": updated_at,
+            })
+
+        # Sort by most recently updated, return top 30
+        sessions.sort(key=lambda s: s.get("updated_at_ms") or 0, reverse=True)
+        return {"sessions": sessions[:30]}
+    except Exception as e:
+        return {"error": str(e), "sessions": []}
+
+
 def get_logs(n=100):
     """Run journalctl and return last n lines as a list of strings."""
     try:
@@ -380,6 +433,21 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/api/subagents":
+            try:
+                data = get_subagents()
+                body = json.dumps(data).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(str(e).encode())
+            return
         if parsed.path == "/api/alerts":
             try:
                 data = get_alerts()
