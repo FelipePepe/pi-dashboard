@@ -270,6 +270,21 @@ ALERT_THRESHOLDS = {
 }
 
 
+def get_logs(n=100):
+    """Run journalctl and return last n lines as a list of strings."""
+    try:
+        result = subprocess.run(
+            ["journalctl", f"-n{n}", "--no-pager", "-o", "short"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        lines = result.stdout.splitlines()
+        return {"lines": lines}
+    except Exception as e:
+        return {"error": str(e), "lines": []}
+
+
 def get_alerts():
     alerts = []
     try:
@@ -368,6 +383,21 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/alerts":
             try:
                 data = get_alerts()
+                body = json.dumps(data).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(str(e).encode())
+            return
+        if parsed.path == "/api/logs":
+            try:
+                data = get_logs()
                 body = json.dumps(data).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")

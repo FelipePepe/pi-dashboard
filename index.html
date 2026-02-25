@@ -401,6 +401,23 @@
 
   .alert-icon { font-size: 14px; flex-shrink: 0; }
 
+  /* Logs tab */
+  .log-box {
+    background: #0a0d12;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    height: 500px;
+    overflow-y: auto;
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .log-line { display: block; white-space: pre-wrap; word-break: break-all; color: #c9d1d9; }
+  .log-line.log-error { color: var(--red); }
+  .log-line.log-warn  { color: var(--yellow); }
+
   /* Graficas tab */
   .chart-card {
     background: var(--surface);
@@ -434,6 +451,7 @@
   <button class="tab-btn" data-tab="charts">&#128200; Gr&#225;ficas</button>
   <button class="tab-btn" data-tab="services">&#9881;&#65039; Servicios</button>
   <button class="tab-btn" data-tab="memory">&#129504; Memoria</button>
+  <button class="tab-btn" data-tab="logs">&#128203; Logs</button>
 </nav>
 
 <!-- Stats tab -->
@@ -537,6 +555,13 @@
   <div class="memory-list" id="memory-list">
     <div style="color:var(--muted);padding:12px 0">Cargando…</div>
   </div>
+</div>
+
+<!-- Logs tab -->
+<div class="tab-panel" id="tab-logs">
+  <div id="logs-updated" style="font-size:11px;color:var(--muted);margin-bottom:12px">Cargando…</div>
+  <div id="logs-error" style="color:var(--red);font-size:13px;margin-bottom:8px"></div>
+  <div class="log-box" id="log-box"></div>
 </div>
 
 <footer id="footer">Last updated: —</footer>
@@ -862,6 +887,59 @@
 
   // Auto-refresh charts every 5s regardless of active tab
   setInterval(fetchHistory, INTERVAL);
+
+  // ── Logs tab ────────────────────────────────────────────────────
+  const API_LOGS = '/api/logs';
+  const LOGS_INTERVAL = 10000;
+
+  function renderLogs(data) {
+    const box = document.getElementById('log-box');
+    const errEl = document.getElementById('logs-error');
+    const updEl = document.getElementById('logs-updated');
+
+    if (data.error) {
+      errEl.textContent = 'Error: ' + data.error;
+      box.innerHTML = '';
+      return;
+    }
+    errEl.textContent = '';
+
+    const lines = data.lines || [];
+    const atBottom = box.scrollHeight - box.scrollTop <= box.clientHeight + 20;
+    box.innerHTML = '';
+    lines.forEach(line => {
+      const span = document.createElement('span');
+      span.className = 'log-line';
+      const lower = line.toLowerCase();
+      if (lower.includes('error') || lower.includes('fail')) {
+        span.classList.add('log-error');
+      } else if (lower.includes('warn')) {
+        span.classList.add('log-warn');
+      }
+      span.textContent = line;
+      box.appendChild(span);
+    });
+    if (atBottom) box.scrollTop = box.scrollHeight;
+    updEl.textContent = 'Actualizado: ' + new Date().toLocaleTimeString();
+  }
+
+  function fetchLogs() {
+    fetch(API_LOGS)
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(renderLogs)
+      .catch(err => {
+        document.getElementById('logs-error').textContent = 'Error: ' + err.message;
+      });
+  }
+
+  // Load logs when switching to that tab
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.tab === 'logs') fetchLogs();
+    });
+  });
+
+  setInterval(fetchLogs, LOGS_INTERVAL);
 
   // ── Servicios tab ───────────────────────────────────────────────
   const API_SERVICES = '/api/services';
