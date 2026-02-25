@@ -17,6 +17,7 @@
     --green:    #3fb950;
     --yellow:   #d29922;
     --red:      #f85149;
+    --blue:     #58a6ff;
     --radius:   8px;
     --gap:      16px;
   }
@@ -34,7 +35,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 24px;
+    margin-bottom: 16px;
     padding-bottom: 16px;
     border-bottom: 1px solid var(--border);
   }
@@ -66,6 +67,37 @@
   }
 
   #status.error::before { background: var(--red); }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tab-btn {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    padding: 8px 14px;
+    margin-bottom: -1px;
+    transition: color 0.2s, border-color 0.2s;
+  }
+
+  .tab-btn:hover { color: var(--text); }
+
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
 
   .grid {
     display: grid;
@@ -180,6 +212,97 @@
   .badge-green  { background: rgba(63,185,80,.15);  color: var(--green);  }
   .badge-yellow { background: rgba(210,153,34,.15); color: var(--yellow); }
   .badge-red    { background: rgba(248,81,73,.15);  color: var(--red);    }
+  .badge-blue   { background: rgba(88,166,255,.15); color: var(--blue);   }
+  .badge-gray   { background: rgba(139,148,158,.15); color: var(--muted); }
+
+  /* Memoria tab */
+  .memory-search {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .memory-search:focus { border-color: var(--accent); }
+  .memory-search::placeholder { color: var(--muted); }
+
+  .memory-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .memory-entry {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .memory-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+  }
+
+  .memory-header:hover { background: rgba(255,255,255,0.03); }
+
+  .memory-title {
+    flex: 1;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  .memory-meta {
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .memory-chevron {
+    font-size: 10px;
+    color: var(--muted);
+    transition: transform 0.2s;
+  }
+
+  .memory-entry.open .memory-chevron { transform: rotate(90deg); }
+
+  .memory-body {
+    display: none;
+    padding: 0 14px 14px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--muted);
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.6;
+  }
+
+  .memory-entry.open .memory-body { display: block; }
+
+  #memory-count {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  #memory-error {
+    color: var(--red);
+    font-size: 13px;
+    padding: 12px 0;
+  }
 
   footer {
     margin-top: 8px;
@@ -196,78 +319,115 @@
   <div id="status">Connecting…</div>
 </header>
 
-<div class="grid" id="stat-grid">
-  <!-- CPU -->
-  <div class="card" id="card-cpu">
-    <div class="card-label">CPU Usage</div>
-    <div class="card-value" id="cpu-val">—</div>
-    <div class="card-sub" id="cpu-sub"></div>
-    <div class="bar-track"><div class="bar-fill" id="cpu-bar" style="width:0%"></div></div>
+<!-- Tab navigation -->
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="stats">&#128187; Sistema</button>
+  <button class="tab-btn" data-tab="memory">&#129504; Memoria</button>
+</nav>
+
+<!-- Stats tab -->
+<div class="tab-panel active" id="tab-stats">
+  <div class="grid" id="stat-grid">
+    <!-- CPU -->
+    <div class="card" id="card-cpu">
+      <div class="card-label">CPU Usage</div>
+      <div class="card-value" id="cpu-val">—</div>
+      <div class="card-sub" id="cpu-sub"></div>
+      <div class="bar-track"><div class="bar-fill" id="cpu-bar" style="width:0%"></div></div>
+    </div>
+
+    <!-- RAM -->
+    <div class="card" id="card-ram">
+      <div class="card-label">RAM Usage</div>
+      <div class="card-value" id="ram-val">—</div>
+      <div class="card-sub" id="ram-sub"></div>
+      <div class="bar-track"><div class="bar-fill" id="ram-bar" style="width:0%"></div></div>
+    </div>
+
+    <!-- Disk -->
+    <div class="card" id="card-disk">
+      <div class="card-label">Disk Usage</div>
+      <div class="card-value" id="disk-val">—</div>
+      <div class="card-sub" id="disk-sub"></div>
+      <div class="bar-track"><div class="bar-fill" id="disk-bar" style="width:0%"></div></div>
+    </div>
+
+    <!-- CPU Temp -->
+    <div class="card" id="card-temp">
+      <div class="card-label">CPU Temp</div>
+      <div class="card-value" id="temp-val">—</div>
+      <div class="card-sub" id="temp-sub"></div>
+      <div class="bar-track"><div class="bar-fill" id="temp-bar" style="width:0%"></div></div>
+    </div>
+
+    <!-- Load -->
+    <div class="card">
+      <div class="card-label">Load Average</div>
+      <div class="card-value" id="load-val">—</div>
+      <div class="card-sub" id="load-sub">1 min / 5 min / 15 min</div>
+    </div>
+
+    <!-- Uptime -->
+    <div class="card">
+      <div class="card-label">Uptime</div>
+      <div class="card-value" style="font-size:20px;" id="uptime-val">—</div>
+      <div class="card-sub" id="uptime-sub"></div>
+    </div>
   </div>
 
-  <!-- RAM -->
-  <div class="card" id="card-ram">
-    <div class="card-label">RAM Usage</div>
-    <div class="card-value" id="ram-val">—</div>
-    <div class="card-sub" id="ram-sub"></div>
-    <div class="bar-track"><div class="bar-fill" id="ram-bar" style="width:0%"></div></div>
-  </div>
-
-  <!-- Disk -->
-  <div class="card" id="card-disk">
-    <div class="card-label">Disk Usage</div>
-    <div class="card-value" id="disk-val">—</div>
-    <div class="card-sub" id="disk-sub"></div>
-    <div class="bar-track"><div class="bar-fill" id="disk-bar" style="width:0%"></div></div>
-  </div>
-
-  <!-- CPU Temp -->
-  <div class="card" id="card-temp">
-    <div class="card-label">CPU Temp</div>
-    <div class="card-value" id="temp-val">—</div>
-    <div class="card-sub" id="temp-sub"></div>
-    <div class="bar-track"><div class="bar-fill" id="temp-bar" style="width:0%"></div></div>
-  </div>
-
-  <!-- Load -->
-  <div class="card">
-    <div class="card-label">Load Average</div>
-    <div class="card-value" id="load-val">—</div>
-    <div class="card-sub" id="load-sub">1 min / 5 min / 15 min</div>
-  </div>
-
-  <!-- Uptime -->
-  <div class="card">
-    <div class="card-label">Uptime</div>
-    <div class="card-value" style="font-size:20px;" id="uptime-val">—</div>
-    <div class="card-sub" id="uptime-sub"></div>
+  <!-- Top Processes -->
+  <div class="proc-card">
+    <div class="card-label">Top 5 Processes by CPU Time</div>
+    <table>
+      <thead>
+        <tr>
+          <th>PID</th>
+          <th>Name</th>
+          <th style="text-align:right">CPU Time</th>
+          <th style="text-align:right">Mem</th>
+        </tr>
+      </thead>
+      <tbody id="proc-body">
+        <tr><td colspan="4" style="color:var(--muted);padding:12px 8px">Loading…</td></tr>
+      </tbody>
+    </table>
   </div>
 </div>
 
-<!-- Top Processes -->
-<div class="proc-card">
-  <div class="card-label">Top 5 Processes by CPU Time</div>
-  <table>
-    <thead>
-      <tr>
-        <th>PID</th>
-        <th>Name</th>
-        <th style="text-align:right">CPU Time</th>
-        <th style="text-align:right">Mem</th>
-      </tr>
-    </thead>
-    <tbody id="proc-body">
-      <tr><td colspan="4" style="color:var(--muted);padding:12px 8px">Loading…</td></tr>
-    </tbody>
-  </table>
+<!-- Memoria tab -->
+<div class="tab-panel" id="tab-memory">
+  <input
+    class="memory-search"
+    id="memory-search"
+    type="search"
+    placeholder="Buscar en memoria… (título o contenido)"
+    autocomplete="off"
+  />
+  <div id="memory-error"></div>
+  <div id="memory-count"></div>
+  <div class="memory-list" id="memory-list">
+    <div style="color:var(--muted);padding:12px 0">Cargando…</div>
+  </div>
 </div>
 
 <footer id="footer">Last updated: —</footer>
 
 <script>
-  const API = '/api/stats';
-  const INTERVAL = 5000;
+  const API_STATS  = '/api/stats';
+  const API_MEMORY = '/api/memory';
+  const INTERVAL   = 5000;
 
+  // ── Tab switching ──────────────────────────────────────────────
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  // ── Stats tab ──────────────────────────────────────────────────
   function colorClass(pct, warn=60, crit=85) {
     if (pct >= crit) return 'crit';
     if (pct >= warn) return 'warn';
@@ -292,7 +452,6 @@
   }
 
   function fmtCpuTime(ticks) {
-    // ticks are jiffies (typically 1/100 s each)
     const secs = ticks / 100;
     if (secs < 60) return secs.toFixed(1) + 's';
     if (secs < 3600) return (secs / 60).toFixed(1) + 'm';
@@ -300,64 +459,53 @@
   }
 
   function update(data) {
-    // CPU
     const cpuPct = data.cpu_percent;
     setValue('cpu-val', cpuPct + '%');
     setValue('cpu-sub', '');
     setBar('cpu-bar', cpuPct, colorClass(cpuPct));
 
-    // RAM
     const ram = data.ram;
     setValue('ram-val', ram.percent + '%');
     setValue('ram-sub', ram.used_mb + ' MB / ' + ram.total_mb + ' MB');
     setBar('ram-bar', ram.percent, colorClass(ram.percent));
 
-    // Disk
     const disk = data.disk;
     setValue('disk-val', disk.percent + '%');
     setValue('disk-sub', disk.used_gb + ' GB / ' + disk.total_gb + ' GB');
     setBar('disk-bar', disk.percent, colorClass(disk.percent, 70, 90));
 
-    // Temp
     const temp = data.cpu_temp_c;
     if (temp !== null) {
       setValue('temp-val', temp + ' °C');
       setValue('temp-sub', temp >= 80 ? 'HOT' : temp >= 65 ? 'Warm' : 'Normal');
-      // Map 0–100 °C to 0–100%
       setBar('temp-bar', temp, tempColor(temp));
     } else {
       setValue('temp-val', 'N/A');
       setValue('temp-sub', 'sensor unavailable');
     }
 
-    // Load
     const load = data.load;
     setValue('load-val', load['1min'].toFixed(2));
     setValue('load-sub', load['1min'].toFixed(2) + ' / ' + load['5min'].toFixed(2) + ' / ' + load['15min'].toFixed(2));
 
-    // Uptime
     setValue('uptime-val', data.uptime);
 
-    // Processes
     const tbody = document.getElementById('proc-body');
     tbody.innerHTML = '';
     (data.top_processes || []).forEach(p => {
       const tr = document.createElement('tr');
-      const cpuStr = fmtCpuTime(p.cpu_time);
       tr.innerHTML =
         `<td class="pid">${p.pid}</td>` +
         `<td class="name">${escHtml(p.name)}</td>` +
-        `<td class="cpu"><span class="badge badge-green">${cpuStr}</span></td>` +
+        `<td class="cpu"><span class="badge badge-green">${fmtCpuTime(p.cpu_time)}</span></td>` +
         `<td class="mem">${p.mem_mb} MB</td>`;
       tbody.appendChild(tr);
     });
 
-    // Status
     const statusEl = document.getElementById('status');
     statusEl.textContent = 'Live';
     statusEl.className = '';
 
-    // Footer
     document.getElementById('footer').textContent =
       'Last updated: ' + new Date().toLocaleTimeString();
   }
@@ -370,7 +518,7 @@
   }
 
   function fetchStats() {
-    fetch(API)
+    fetch(API_STATS)
       .then(r => {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.json();
@@ -385,6 +533,96 @@
 
   fetchStats();
   setInterval(fetchStats, INTERVAL);
+
+  // ── Memoria tab ────────────────────────────────────────────────
+  function typeBadge(type) {
+    if (type === 'session')    return `<span class="badge badge-blue">session</span>`;
+    if (type === 'preference') return `<span class="badge badge-green">preference</span>`;
+    return `<span class="badge badge-gray">${escHtml(type)}</span>`;
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '';
+    // iso is "YYYY-MM-DD HH:MM:SS" from SQLite
+    const d = new Date(iso.replace(' ', 'T') + 'Z');
+    return d.toLocaleString(undefined, {
+      year: 'numeric', month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+  }
+
+  function renderMemory(observations) {
+    const list = document.getElementById('memory-list');
+    const countEl = document.getElementById('memory-count');
+
+    if (!observations.length) {
+      list.innerHTML = '<div style="color:var(--muted);padding:12px 0">No se encontraron entradas.</div>';
+      countEl.textContent = '';
+      return;
+    }
+
+    countEl.textContent = observations.length + ' entrada' + (observations.length !== 1 ? 's' : '');
+    list.innerHTML = '';
+
+    observations.forEach(obs => {
+      const entry = document.createElement('div');
+      entry.className = 'memory-entry';
+      entry.innerHTML =
+        `<div class="memory-header">` +
+          typeBadge(obs.type) +
+          `<span class="memory-title">${escHtml(obs.title)}</span>` +
+          `<span class="memory-meta">${escHtml(obs.project || '')} &middot; ${fmtDate(obs.created_at)}</span>` +
+          `<span class="memory-chevron">&#9654;</span>` +
+        `</div>` +
+        `<div class="memory-body">${escHtml(obs.content || '')}</div>`;
+
+      entry.querySelector('.memory-header').addEventListener('click', () => {
+        entry.classList.toggle('open');
+      });
+
+      list.appendChild(entry);
+    });
+  }
+
+  let memoryDebounce = null;
+
+  function fetchMemory(q) {
+    const url = q ? API_MEMORY + '?q=' + encodeURIComponent(q) : API_MEMORY;
+    const errEl = document.getElementById('memory-error');
+    errEl.textContent = '';
+    fetch(url)
+      .then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(data => {
+        if (data.error) {
+          errEl.textContent = 'Error: ' + data.error;
+          document.getElementById('memory-list').innerHTML = '';
+          document.getElementById('memory-count').textContent = '';
+        } else {
+          renderMemory(data.observations);
+        }
+      })
+      .catch(err => {
+        errEl.textContent = 'Error: ' + err.message;
+      });
+  }
+
+  document.getElementById('memory-search').addEventListener('input', e => {
+    clearTimeout(memoryDebounce);
+    memoryDebounce = setTimeout(() => fetchMemory(e.target.value.trim()), 300);
+  });
+
+  // Load memory when switching to that tab
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.tab === 'memory') {
+        const q = document.getElementById('memory-search').value.trim();
+        fetchMemory(q);
+      }
+    });
+  });
 </script>
 </body>
 </html>

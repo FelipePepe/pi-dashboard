@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""Pi Dashboard server - exposes /api/stats and serves index.html on port 8080."""
+"""Pi Dashboard server - exposes /api/stats, /api/memory and serves index.html on port 8080."""
 
 import json
 import os
+import sqlite3
 import time
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
+
+ENGRAM_DB = os.path.expanduser("~/.engram/engram.db")
 
 
 def read_cpu_temp():
@@ -151,12 +155,62 @@ def get_stats():
     }
 
 
+def get_memory(query=None):
+    """Return observations from engram.db, optionally filtered by query string."""
+    if not os.path.exists(ENGRAM_DB):
+        return {"error": "engram.db not found", "observations": []}
+    try:
+        conn = sqlite3.connect(f"file:{ENGRAM_DB}?mode=ro", uri=True)
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        if query:
+            like = f"%{query}%"
+            cur.execute(
+                """SELECT id, type, title, content, project, created_at
+                   FROM observations
+                   WHERE deleted_at IS NULL
+                     AND (title LIKE ? OR content LIKE ?)
+                   ORDER BY created_at DESC""",
+                (like, like),
+            )
+        else:
+            cur.execute(
+                """SELECT id, type, title, content, project, created_at
+                   FROM observations
+                   WHERE deleted_at IS NULL
+                   ORDER BY created_at DESC"""
+            )
+        rows = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        return {"observations": rows}
+    except Exception as e:
+        return {"error": str(e), "observations": []}
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         # Suppress default access log noise; print only errors
         pass
 
     def do_GET(self):
+        parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/api/memory":
+            qs = urllib.parse.parse_qs(parsed.query)
+            query = qs.get("q", [None])[0]
+            try:
+                data = get_memory(query)
+                body = json.dumps(data).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(str(e).encode())
+            return
         if self.path == "/api/stats":
             try:
                 data = get_stats()
