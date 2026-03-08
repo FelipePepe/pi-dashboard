@@ -39,6 +39,28 @@ def _collect_history():
 
 ENGRAM_DB = os.path.expanduser("~/.engram/engram.db")
 
+TASKS_FILE = Path("/home/felipe/.openclaw/workspace/TASKS.md")
+SUMMARY_FILE = Path("/home/felipe/.openclaw/workspace/SUMMARY.md")
+
+
+def read_tasks():
+    try:
+        content = TASKS_FILE.read_text() if TASKS_FILE.exists() else "(sin tasks)"
+        updated = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(TASKS_FILE.stat().st_mtime)) if TASKS_FILE.exists() else ""
+        return {"content": content, "updated_at": updated}
+    except Exception as e:
+        return {"content": f"Error leyendo TASKS.md: {e}", "updated_at": ""}
+
+
+def read_summary():
+    try:
+        content = SUMMARY_FILE.read_text() if SUMMARY_FILE.exists() else "(sin resumen)"
+        updated = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(SUMMARY_FILE.stat().st_mtime)) if SUMMARY_FILE.exists() else ""
+        return {"content": content, "updated_at": updated}
+    except Exception as e:
+        return {"content": f"Error leyendo SUMMARY.md: {e}", "updated_at": ""}
+
+
 
 def read_cpu_temp():
     try:
@@ -610,6 +632,38 @@ class Handler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(str(e).encode())
             return
+        if parsed.path == "/api/tasks":
+            try:
+                data = read_tasks()
+                body = json.dumps(data).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(str(e).encode())
+            return
+
+        if parsed.path == "/api/summary":
+            try:
+                data = read_summary()
+                body = json.dumps(data).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(str(e).encode())
+            return
+
         if parsed.path == "/api/history":
             try:
                 data = get_history()

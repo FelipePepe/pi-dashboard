@@ -415,6 +415,38 @@
 
   .alert-icon { font-size: 14px; flex-shrink: 0; }
 
+  /* Conversacion tab */
+  .convo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: var(--gap);
+  }
+
+  .task-box {
+    background: rgba(88, 166, 255, 0.08);
+    border: 1px solid rgba(88, 166, 255, 0.25);
+    border-radius: var(--radius);
+    padding: 12px;
+    font-size: 12px;
+    color: var(--text);
+    white-space: pre-wrap;
+  }
+
+  .summary-box {
+    background: rgba(63, 185, 80, 0.08);
+    border: 1px solid rgba(63, 185, 80, 0.25);
+    border-radius: var(--radius);
+    padding: 12px;
+    font-size: 12px;
+    color: var(--text);
+    white-space: pre-wrap;
+  }
+
+  .convo-meta {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
   /* Agentes tab */
   .agents-grid {
     display: grid;
@@ -610,6 +642,7 @@
   <button class="tab-btn" data-tab="memory">&#129504; Memoria</button>
   <button class="tab-btn" data-tab="logs">&#128203; Logs</button>
   <button class="tab-btn" data-tab="agents">&#129302; Agentes</button>
+  <button class="tab-btn" data-tab="convo">&#128172; Conversaci&#243;n</button>
 </nav>
 
 <!-- Stats tab -->
@@ -747,6 +780,22 @@
   </div>
 </div>
 
+<!-- Conversacion tab -->
+<div class="tab-panel" id="tab-convo">
+  <div class="convo-grid">
+    <div class="card">
+      <div class="card-label">Bandeja de tareas</div>
+      <div class="convo-meta" id="tasks-updated">Cargando…</div>
+      <div class="task-box" id="tasks-box">Cargando…</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Resumen inteligente</div>
+      <div class="convo-meta" id="summary-updated">Cargando…</div>
+      <div class="summary-box" id="summary-box">Cargando…</div>
+    </div>
+  </div>
+</div>
+
 <!-- Logs tab -->
 <div class="tab-panel" id="tab-logs">
   <div id="logs-updated" style="font-size:11px;color:var(--muted);margin-bottom:12px">Cargando…</div>
@@ -760,6 +809,8 @@
   const API_STATS   = '/api/stats';
   const API_MEMORY  = '/api/memory';
   const API_ALERTS  = '/api/alerts';
+  const API_TASKS   = '/api/tasks';
+  const API_SUMMARY = '/api/summary';
   const INTERVAL    = 5000;
 
   function escHtml(s) {
@@ -1078,6 +1129,32 @@
   // Auto-refresh charts every 5s regardless of active tab
   setInterval(fetchHistory, INTERVAL);
 
+
+  // ── Conversacion tab ─────────────────────────────────────────
+  function fetchTasks() {
+    fetch(API_TASKS)
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(data => {
+        document.getElementById('tasks-box').textContent = data.content || 'Sin tareas';
+        document.getElementById('tasks-updated').textContent = data.updated_at ? `Actualizado: ${data.updated_at}` : 'Actualizado: —';
+      })
+      .catch(() => {
+        document.getElementById('tasks-box').textContent = 'No se pudo cargar.';
+      });
+  }
+
+  function fetchSummary() {
+    fetch(API_SUMMARY)
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(data => {
+        document.getElementById('summary-box').textContent = data.content || 'Sin resumen';
+        document.getElementById('summary-updated').textContent = data.updated_at ? `Actualizado: ${data.updated_at}` : 'Actualizado: —';
+      })
+      .catch(() => {
+        document.getElementById('summary-box').textContent = 'No se pudo cargar.';
+      });
+  }
+
   // ── Agentes tab ─────────────────────────────────────────────────
   const API_SUBAGENTS = '/api/subagents';
   const API_SUBAGENT_HISTORY = '/api/subagent-history';
@@ -1227,6 +1304,8 @@
   });
 
   setInterval(fetchAgents, AGENTS_INTERVAL);
+  setInterval(fetchTasks, 15000);
+  setInterval(fetchSummary, 15000);
 
   // ── Logs tab ────────────────────────────────────────────────────
   const API_LOGS = '/api/logs';
