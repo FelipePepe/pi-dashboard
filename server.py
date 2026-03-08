@@ -274,7 +274,8 @@ ALERT_THRESHOLDS = {
 }
 
 
-SESSIONS_JSON = os.path.expanduser("~/.openclaw/agents/main/sessions/sessions.json")
+SESSIONS_DIR = os.path.expanduser("~/.openclaw/agents/main/sessions")
+SESSIONS_JSON = os.path.join(SESSIONS_DIR, "sessions.json")
 
 
 def get_subagents():
@@ -325,6 +326,78 @@ def get_subagents():
         return {"sessions": sessions[:30]}
     except Exception as e:
         return {"error": str(e), "sessions": []}
+
+def _summarize_session(session_id):
+    """Return (result_text, is_error) from a session jsonl file."""
+    if not session_id:
+        return "", False
+    path = Path(SESSIONS_DIR) / f"{session_id}.jsonl"
+    if not path.exists():
+        return "", False
+
+    last_text = ""
+    last_tool_text = ""
+    is_error = False
+    try:
+        for line in path.read_text().splitlines():
+            try:
+                obj = json.loads(line)
+            except Exception:
+                continue
+            msg = obj.get("message", {})
+            role = msg.get("role")
+            if role == "toolResult":
+                if msg.get("isError"):
+                    is_error = True
+                parts = [c.get("text", "") for c in msg.get("content", []) if c.get("text")]
+                if parts:
+                    last_tool_text = " ".join(parts).strip()
+            elif role == "assistant":
+                parts = [c.get("text", "") for c in msg.get("content", []) if c.get("type") == "text" and c.get("text")]
+                if parts:
+                    last_text = " ".join(parts).strip()
+                    low = last_text.lower()
+                    if "error" in low or "fail" in low:
+                        is_error = True
+    except Exception:
+        return "", False
+
+    return (last_text or last_tool_text or ""), is_error
+
+
+def get_subagent_history(session_key, limit=20):
+    if not os.path.exists(SESSIONS_JSON):
+        return {"error": "sessions.json not found", "history": []}
+    if not session_key:
+        return {"error": "missing key", "history": []}
+
+    try:
+        with open(SESSIONS_JSON) as f:
+            data = json.load(f)
+
+        run_prefix = f"{session_key}:run:"
+        run_keys = [k for k in data.keys() if k.startswith(run_prefix)]
+        runs = []
+        for key in run_keys:
+            val = data.get(key) or {}
+            updated_at = val.get("updatedAt")
+            label = val.get("label") or session_key.split(":")[-1]
+            session_id = val.get("sessionId", "")
+            result_text, is_error = _summarize_session(session_id)
+            runs.append({
+                "run_key": key,
+                "task": label,
+                "updated_at_ms": updated_at,
+                "result": result_text,
+                "status": "error" if is_error else "ok",
+            })
+
+        runs.sort(key=lambda r: r.get("updated_at_ms") or 0, reverse=True)
+        return {"history": runs[:limit]}
+    except Exception as e:
+        return {"error": str(e), "history": []}
+
+
 
 
 def get_logs(n=100):
@@ -440,6 +513,29 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/subagents":
             try:
                 data = get_subagents()
+                body = json.dumps(data).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(str(e).encode())
+            return
+
+        if parsed.path == "/api/subagent-history":
+            qs = urllib.parse.parse_qs(parsed.query)
+            key = qs.get("key", [""])[0]
+            limit = qs.get("limit", ["20"])[0]
+            try:
+                limit = int(limit)
+            except Exception:
+                limit = 20
+            try:
+                data = get_subagent_history(key, limit=limit)
                 body = json.dumps(data).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
@@ -576,7 +672,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    port = 8080
+    port = 8090
     t = threading.Thread(target=_collect_history, daemon=True)
     t.start()
     server = HTTPServer(("0.0.0.0", port), Handler)

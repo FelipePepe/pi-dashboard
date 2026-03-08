@@ -422,6 +422,94 @@
     gap: var(--gap);
   }
 
+  .agent-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 6px;
+  }
+
+  .history-btn {
+    background: rgba(88,166,255,0.12);
+    color: var(--accent);
+    border: 1px solid rgba(88,166,255,0.35);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 11px;
+    font-family: inherit;
+    cursor: pointer;
+  }
+
+  .history-btn:hover { background: rgba(88,166,255,0.2); }
+
+  /* History modal */
+  .modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 999;
+  }
+
+  .modal.open { display: flex; }
+
+  .modal-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    width: min(720px, 100%);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .modal-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .modal-close {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 16px;
+    cursor: pointer;
+  }
+
+  .modal-body {
+    padding: 12px 16px 16px;
+    overflow: auto;
+  }
+
+  .modal-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  .history-table td {
+    vertical-align: top;
+  }
+
+  .history-result {
+    color: var(--muted);
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
   .agent-card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -632,6 +720,31 @@
   <div id="agents-updated" style="font-size:11px;color:var(--muted);margin-bottom:12px">Cargando…</div>
   <div id="agents-error" style="color:var(--red);font-size:13px;margin-bottom:8px"></div>
   <div class="agents-grid" id="agents-grid"></div>
+</div>
+
+<!-- History modal -->
+<div class="modal" id="history-modal" aria-hidden="true">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-title" id="history-title">Historial</div>
+      <button class="modal-close" id="history-close" aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-sub" id="history-sub">Cargando…</div>
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>Tarea</th>
+            <th>Hora</th>
+            <th>Resultado</th>
+          </tr>
+        </thead>
+        <tbody id="history-body">
+          <tr><td colspan="3" style="color:var(--muted);padding:12px 8px">Cargando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 <!-- Logs tab -->
@@ -967,6 +1080,7 @@
 
   // ── Agentes tab ─────────────────────────────────────────────────
   const API_SUBAGENTS = '/api/subagents';
+  const API_SUBAGENT_HISTORY = '/api/subagent-history';
   const AGENTS_INTERVAL = 10000;
 
   function fmtRelTime(ms) {
@@ -988,6 +1102,69 @@
     };
     return `<span class="badge ${map[kind] || 'badge-gray'}">${escHtml(kind)}</span>`;
   }
+
+
+  const historyModal = document.getElementById('history-modal');
+  const historyBody = document.getElementById('history-body');
+  const historyTitle = document.getElementById('history-title');
+  const historySub = document.getElementById('history-sub');
+
+  function fmtDateTime(ms) {
+    if (!ms) return '—';
+    return new Date(ms).toLocaleString();
+  }
+
+  function openHistory(key, label) {
+    historyTitle.textContent = `Historial · ${label || 'agente'}`;
+    historySub.textContent = 'Cargando…';
+    historyBody.innerHTML = '<tr><td colspan="3" style="color:var(--muted);padding:12px 8px">Cargando…</td></tr>';
+    historyModal.classList.add('open');
+    historyModal.setAttribute('aria-hidden', 'false');
+
+    fetch(`${API_SUBAGENT_HISTORY}?key=${encodeURIComponent(key)}&limit=20`)
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(data => {
+        if (data.error) {
+          historySub.textContent = 'Error: ' + data.error;
+          historyBody.innerHTML = '<tr><td colspan="3" style="color:var(--red);padding:12px 8px">No se pudo cargar el historial.</td></tr>';
+          return;
+        }
+        const items = data.history || [];
+        historySub.textContent = items.length ? `${items.length} ejecuciones` : 'Sin ejecuciones';
+        if (!items.length) {
+          historyBody.innerHTML = '<tr><td colspan="3" style="color:var(--muted);padding:12px 8px">No hay historial.</td></tr>';
+          return;
+        }
+        historyBody.innerHTML = '';
+        items.forEach(item => {
+          const tr = document.createElement('tr');
+          const badge = item.status === 'error'
+            ? '<span class="badge badge-red">error</span>'
+            : '<span class="badge badge-green">ok</span>';
+          tr.innerHTML =
+            `<td>${escHtml(item.task || '—')}<div class="history-result">${badge}</div></td>` +
+            `<td>${fmtDateTime(item.updated_at_ms)}</td>` +
+            `<td><div class="history-result">${escHtml(item.result || '—')}</div></td>`;
+          historyBody.appendChild(tr);
+        });
+      })
+      .catch(err => {
+        historySub.textContent = 'Error: ' + err.message;
+        historyBody.innerHTML = '<tr><td colspan="3" style="color:var(--red);padding:12px 8px">No se pudo cargar el historial.</td></tr>';
+      });
+  }
+
+  function closeHistory() {
+    historyModal.classList.remove('open');
+    historyModal.setAttribute('aria-hidden', 'true');
+  }
+
+  document.getElementById('history-close').addEventListener('click', closeHistory);
+  historyModal.addEventListener('click', e => {
+    if (e.target === historyModal) closeHistory();
+  });
+
+  function renderAgents(data) {
 
   function renderAgents(data) {
     const grid = document.getElementById('agents-grid');
@@ -1022,7 +1199,12 @@
           `<span>${escHtml(s.model || '—')}</span>` +
           `<span>${tokStr}</span>` +
           `<span>${fmtRelTime(s.updated_at_ms)}</span>` +
+        `</div>` +
+        `<div class="agent-actions">` +
+          `<button class="history-btn" data-key="${escHtml(s.key)}">Historial</button>` +
         `</div>`;
+      const btn = card.querySelector('.history-btn');
+      btn.addEventListener('click', () => openHistory(s.key, s.label));
       grid.appendChild(card);
     });
 
