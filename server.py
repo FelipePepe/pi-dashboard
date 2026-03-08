@@ -693,7 +693,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_response(500)
                 self.end_headers()
                 self.wfile.write(str(e).encode())
-        elif self.path in ("/", "/index.html"):
+        elif self.path in ("/", "/index.html", "/pi-dashboard", "/pi-dashboard/", "/pi-dashboard/index.html"):
             index_path = os.path.join(os.path.dirname(__file__), "index.html")
             try:
                 with open(index_path, "rb") as f:
